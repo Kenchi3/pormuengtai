@@ -402,7 +402,7 @@ end)
 -- ========================
 task.spawn(function()
     while task.wait(0.5) do
-        if Options.AutoEquip.Value and selectedTool and char and hrp then
+        if Options.AutoEquip.Value and Options.AutoFarm.Value and selectedTool and char and hrp then
             
             -- ⛔ กันรีบ equip หลังเกิด
             if tick() - respawnTime < 2 then continue end
