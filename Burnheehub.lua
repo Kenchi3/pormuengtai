@@ -453,7 +453,7 @@ task.spawn(function()
     local order = {"Z","X","C","V","R"} -- 🔥 ลำดับสกิล
 
     while task.wait(0.02) do -- 🔥 เร็วขึ้น
-        if Options.AutoSkill.Value then
+        if Options.AutoSkill.Value and Options.AutoFarm.Value then
             for _, key in ipairs(order) do
                 if SelectedSkills[key] then
                     local keyCode = Enum.KeyCode[key]
