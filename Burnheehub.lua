@@ -12,7 +12,7 @@ local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.
 -- 🪟 Create Window
 -- ========================
 local Window = Fluent:CreateWindow({
-    Title = "Benten Hub",
+    Title = "Burnhee Hub",
     SubTitle = "by Nonny",
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 460),
