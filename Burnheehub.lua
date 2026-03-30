@@ -1,3 +1,5 @@
+repeat task.wait() until game:IsLoaded()
+task.wait(3)
 
 -- ========================
 -- 🔗 Load UI
@@ -41,6 +43,7 @@ local userId = player.UserId
 
 local enemiesFolder = workspace:WaitForChild("Enemies")
 local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local UserInputService = game:GetService("UserInputService")
 local distanceBehind = 6 -- ค่าเริ่มต้น
@@ -464,11 +467,6 @@ task.spawn(function()
 
     while task.wait(0.02) do
         if Options.AutoSkill.Value and Options.AutoFarm.Value then
-            
-            if currentMob and root then
-                aimAtTarget(root) -- 🎯 auto aim
-            end
-
             for _, key in ipairs(order) do
                 if SelectedSkills[key] then
                     local keyCode = Enum.KeyCode[key]
@@ -480,6 +478,14 @@ task.spawn(function()
                     end
                 end
             end
+        end
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if Options.AutoFarm.Value and Options.AutoSkill.Value then
+        if currentMob and root then
+            aimAtTarget(root)
         end
     end
 end)
