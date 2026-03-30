@@ -1,5 +1,3 @@
-repeat task.wait() until game:IsLoaded()
-task.wait(3)
 
 -- ========================
 -- 🔗 Load UI
@@ -12,7 +10,7 @@ local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.
 -- 🪟 Create Window
 -- ========================
 local Window = Fluent:CreateWindow({
-    Title = "Burnhee Hub",
+    Title = "Benten Hub",
     SubTitle = "by Nonny",
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 460),
@@ -35,6 +33,8 @@ local Options = Fluent.Options
 -- 🧠 Game System
 -- ========================
 local player = game.Players.LocalPlayer
+local Players = game:GetService("Players")
+local mouse = player:GetMouse()
 local char = player.Character or player.CharacterAdded:Wait()
 local hrp = char:WaitForChild("HumanoidRootPart")
 local userId = player.UserId
@@ -107,6 +107,16 @@ local function getEnemy()
     end
 
     return closest, closestHum, closestRoot
+end
+-- anim lock monster --
+local function aimAtTarget(targetRoot)
+    if not targetRoot then return end
+
+    local pos, onScreen = Camera:WorldToViewportPoint(targetRoot.Position)
+
+    if onScreen then
+        VirtualInputManager:SendMouseMoveEvent(pos.X, pos.Y, game)
+    end
 end
 -- อัปเดตตัวแปรตัวละครเมื่อเกิดใหม่ --
 local function updateCharacter()
@@ -450,17 +460,22 @@ end)
 -- ⚔️ Auto Skill
 -- ========================
 task.spawn(function()
-    local order = {"Z","X","C","V","R"} -- 🔥 ลำดับสกิล
+    local order = {"Z","X","C","V","R"}
 
-    while task.wait(0.02) do -- 🔥 เร็วขึ้น
+    while task.wait(0.02) do
         if Options.AutoSkill.Value and Options.AutoFarm.Value then
+            
+            if currentMob and root then
+                aimAtTarget(root) -- 🎯 auto aim
+            end
+
             for _, key in ipairs(order) do
                 if SelectedSkills[key] then
                     local keyCode = Enum.KeyCode[key]
 
                     if keyCode then
                         VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
-                        task.wait(0.01) -- 🔥 กดไวขึ้น
+                        task.wait(0.01)
                         VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
                     end
                 end
