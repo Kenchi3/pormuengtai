@@ -23,6 +23,7 @@ local Window = Fluent:CreateWindow({
 -- ========================
 local Tabs = {
     Main = Window:AddTab({ Title = "Main", Icon = "" }),
+    Spin = Window:AddTab({ Title = "Spin", Icon = "" }),
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 }
 
@@ -37,6 +38,7 @@ local mouse = player:GetMouse()
 local char = player.Character or player.CharacterAdded:Wait()
 local hrp = char:WaitForChild("HumanoidRootPart")
 local userId = player.UserId
+local GuiService = game:GetService("GuiService")
 
 local enemiesFolder = workspace:WaitForChild("Enemies")
 local RunService = game:GetService("RunService")
@@ -280,6 +282,24 @@ Tabs.Main:AddButton({
     end
 })
 
+local ClanDropdown = Tabs.Spin:AddDropdown("ClanSelect", {
+    Title = "Select Desired Clans",
+    Values = {"SUKUNA","GOJO","MAHITO","KAMO","HAKARI","KASHIMO","OKKOTSU"}, -- เปลี่ยนเป็นชื่อ Clan จริงในเกม
+    Multi = true,
+    Default = {"SUKUNA"} -- ค่าเริ่มต้น
+})
+
+local SelectedClans = {}
+ClanDropdown:OnChanged(function(Value)
+    SelectedClans = {}
+    for clanName,state in pairs(Value) do
+        if state then
+            table.insert(SelectedClans, tostring(clanName))
+        end
+    end
+end)
+
+
 -- ========================
 -- 🔘 Toggles
 -- ========================
@@ -287,12 +307,15 @@ local AutoFarm = Tabs.Main:AddToggle("AutoFarm", {Title = "Auto Farm Mobs", Defa
 local AutoSkill = Tabs.Main:AddToggle("AutoSkill", {Title = "Auto Skill", Default = false})
 local AutoEquip = Tabs.Main:AddToggle("AutoEquip", {Title = "Auto Equip Tool", Default = false})
 local AutoReplay = Tabs.Main:AddToggle("AutoReplay", {Title = "Auto Replay", Default = false})
+local AutoSpin = Tabs.Spin:AddToggle("AutoSpin", {Title="Auto Spin Clan", Default=false})
+
 
 
 Options.AutoFarm:SetValue(false)
 Options.AutoSkill:SetValue(false)
 Options.AutoEquip:SetValue(false)
 Options.AutoReplay:SetValue(false)
+Options.AutoSpin:SetValue(false)
 
 AutoFarm:OnChanged(function()
     if Options.AutoFarm.Value then
@@ -452,8 +475,6 @@ task.spawn(function()
     local Container = Repaly:WaitForChild("Container")
     local Button = Container:WaitForChild("Button")
 
-    local GuiService = game:GetService("GuiService")
-
     while task.wait(0.3) do
         if Options.AutoReplay.Value and CanvasGroup.Visible then
             GuiService.SelectedObject = Button
@@ -502,6 +523,86 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
+-- ========================
+-- 🔹 Auto Spin Logic (Notify Version)
+-- ========================
+task.spawn(function()
+
+    local function press(btn)
+        if not btn then return end
+        GuiService.SelectedObject = btn
+        GuiService.SelectedObject = btn
+        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
+        task.wait(0.05)
+        GuiService.SelectedObject = nil
+    end
+
+    while task.wait(0.5) do
+        if not Options.AutoSpin.Value then continue end
+
+        -- 🔹 หา Spin Button
+        local spinButton = player.PlayerGui.MainMenu.Frame.Body:FindFirstChild("SpinOnce", true)
+        if not spinButton or not spinButton:FindFirstChild("Container") then
+            Fluent:Notify({Title="Auto Spin", Content="[Spin] ไม่เจอ SpinOnce", Duration=3})
+            continue
+        end
+
+        local btn = spinButton.Container:FindFirstChild("Button")
+        if not btn then
+            Fluent:Notify({Title="Auto Spin", Content="[Spin] ไม่เจอปุ่ม Spin", Duration=3})
+            continue
+        end
+
+        -- 🔥 กด Spin
+        press(btn)
+        Fluent:Notify({Title="Auto Spin", Content="▶ กด Spin แล้ว", Duration=2})
+
+        -- 🔹 รอ Confirmation
+        local confirmation, changeClan
+        local start = tick()
+
+        repeat
+            confirmation = player.PlayerGui:FindFirstChild("Confirmation")
+            if confirmation then
+                changeClan = confirmation:FindFirstChild("ChangeClan")
+            end
+            task.wait(0.1)
+        until (changeClan) or tick() - start > 10
+
+        if not changeClan then
+            Fluent:Notify({Title="Auto Spin", Content="[Spin] ไม่เจอ ChangeClan", Duration=3})
+            continue
+        end
+
+        -- 🔹 อ่าน Clan
+        local clanLabel = changeClan.Body.Content["2"].Clan.Clan
+        local clanName = clanLabel.Text
+
+        Fluent:Notify({Title="Auto Spin", Content="[Spin] ได้ Clan: " .. clanName, Duration=3})
+
+        -- 🔹 เช็ค Clan
+        if table.find(SelectedClans, clanName) then
+            Fluent:Notify({Title="Auto Spin", Content="[Spin] ✅ ตรง → รับ", Duration=3})
+
+            local yesBtn = changeClan.Options.Yes.Container.Button
+            press(yesBtn)
+
+            Fluent:Notify({
+                Title = "Auto Spin",
+                Content = "Got Clan: " .. clanName,
+                Duration = 5
+            })
+
+            break
+        else
+            local noBtn = changeClan.Options.No.Container.Button
+            press(noBtn)
+
+            task.wait(1)
+        end
+    end
+end)
 -- ========================
 -- ⚙️ Save / UI Manager
 -- ========================
