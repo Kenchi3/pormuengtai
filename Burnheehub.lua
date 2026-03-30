@@ -48,8 +48,6 @@ local UserInputService = game:GetService("UserInputService")
 local distanceBehind = 6 -- ค่าเริ่มต้น
 local lastPos = nil
 local stuckTime = 0
-local selectedTool = nil
-local toolList = {}
 local lastHit = 0
 local hitDelay = 0.4 -- ปรับได้ (0.2-0.6 กำลังดี)
 local respawnTime = 0
@@ -57,6 +55,7 @@ local lastPoint = nil
 local safeHPPercent = 30
 local safeDistance = 50 -- ระยะหนีมอน
 local isEscaping = false
+local lastEquip = 0
 
 local SelectedSkills = {Z=true,X=true,C=true,V=true}
 local currentMob, hum, root
@@ -135,19 +134,17 @@ player.CharacterAdded:Connect(function()
 end)
 
 updateCharacter()
--- หา Tool ใน Backpack --
-local function getTools()
-    toolList = {}
-    task.wait(3) -- รอโหลด Backpack
 
+local function getTools()
+    local list = {}
     for _, v in pairs(player.Backpack:GetChildren()) do
         if v:IsA("Tool") then
-            table.insert(toolList, v.Name)
+            table.insert(list, v.Name)
         end
     end
-
-    return toolList
+    return list
 end
+
 
 -- ========================
 -- 🗺️ Dungeon Positions (แยกตาม PlaceId)
@@ -244,43 +241,52 @@ local SkillDropdown = Tabs.Main:AddDropdown("SkillSelect", {
     Default = {"Z","X","C","V","R"},
 })
 
+local SelectedSkills = {Z=true,X=true,C=true,V=true,R=true}
+
+-- Dropdown ไม่สร้าง table ใหม่
 SkillDropdown:OnChanged(function(Value)
-    SelectedSkills = {Z=false,X=false,C=false,V=false,R=false}
+    -- เคลียร์ค่าเดิม
+    for k,_ in pairs(SelectedSkills) do
+        SelectedSkills[k] = false
+    end
 
-    for key, state in pairs(Value) do
-        key = tostring(key)
-
-        if SelectedSkills[key] ~= nil then
-            SelectedSkills[key] = state
+    -- อัปเดตค่าจาก Dropdown.Value
+    for k,v in pairs(Value) do
+        if SelectedSkills[k] ~= nil then
+            SelectedSkills[k] = v
         end
     end
 end)
 
+
+-- 🔹 Selected Tool จาก Dropdown
 local ToolDropdown = Tabs.Main:AddDropdown("ToolSelect", {
     Title = "Select Tool",
-    Values = getTools(),
+    Values = getTools(), -- เรียกใช้ฟังก์ชัน getTools() ของคุณ
     Multi = false,
     Default = nil
 })
 
+local selectedTool = nil
 ToolDropdown:OnChanged(function(Value)
     selectedTool = Value
+    Fluent:Notify({
+        Title = "Tool",
+        Content = "Selected: "..tostring(Value),
+        Duration = 2
+    })
 end)
 
+-- 🔹 ปุ่ม Refresh Tools
 Tabs.Main:AddButton({
-    Title = "Refresh Tool",
-    Description = "อัปเดตรายชื่อ Tool",
+    Title = "Refresh Tool List",
     Callback = function()
-        local newTools = getTools()
-        ToolDropdown:SetValues(newTools)
-
-        Fluent:Notify({
-            Title = "Refreshed",
-            Content = "Updated tool list 🔄",
-            Duration = 3
-        })
+        local tools = getTools()
+        ToolDropdown:SetValues(tools)
+        Fluent:Notify({Title="Tool", Content="Tool list refreshed", Duration=2})
     end
 })
+
 
 local ClanDropdown = Tabs.Spin:AddDropdown("ClanSelect", {
     Title = "Select Desired Clans",
@@ -305,7 +311,6 @@ end)
 -- ========================
 local AutoFarm = Tabs.Main:AddToggle("AutoFarm", {Title = "Auto Farm Mobs", Default = false})
 local AutoSkill = Tabs.Main:AddToggle("AutoSkill", {Title = "Auto Skill", Default = false})
-local AutoEquip = Tabs.Main:AddToggle("AutoEquip", {Title = "Auto Equip Tool", Default = false})
 local AutoReplay = Tabs.Main:AddToggle("AutoReplay", {Title = "Auto Replay", Default = false})
 local AutoSpin = Tabs.Spin:AddToggle("AutoSpin", {Title="Auto Spin Clan", Default=false})
 
@@ -313,7 +318,6 @@ local AutoSpin = Tabs.Spin:AddToggle("AutoSpin", {Title="Auto Spin Clan", Defaul
 
 Options.AutoFarm:SetValue(false)
 Options.AutoSkill:SetValue(false)
-Options.AutoEquip:SetValue(false)
 Options.AutoReplay:SetValue(false)
 Options.AutoSpin:SetValue(false)
 
@@ -335,7 +339,7 @@ local DistanceSlider = Tabs.Main:AddSlider("Distance", {
     Title = "Distance From Enemy",
     Description = "ระยะห่างจากมอน",
     Default = 6,
-    Min = 0,
+    Min = 1,
     Max = 15,
     Rounding = 0,
     Callback = function(Value)
@@ -421,7 +425,7 @@ RunService.Heartbeat:Connect(function()
     hrp.CFrame = targetCF
     hrp.CFrame = CFrame.new(hrp.Position, root.Position)
 
-    if hum and hum.Health > 0 then
+    if hum and hum.Health > 0 and not mouseDown then
          aimAtTarget(root)
         if tick() - lastHit >= hitDelay and not mouseDown then
             lastHit = tick()
@@ -438,31 +442,60 @@ end)
 -- ========================
 -- 🧰 Auto Equip Tool
 -- ========================
+-- 🔹 ฟังก์ชันหา Tool ที่เลือก
+local function getSelectedTool(toolName)
+    if not toolName or not char then return nil end
+
+    local equippedTool = char:FindFirstChildOfClass("Tool")
+    if equippedTool and equippedTool.Name == toolName then
+        return equippedTool
+    end
+
+    local toolInBackpack = player.Backpack:FindFirstChild(toolName)
+    if toolInBackpack then
+        return toolInBackpack
+    end
+
+    return nil
+end
+
+-- 🔹 ฟังก์ชัน Equip Tool
+local function equipTool(toolName)
+    local tool = getSelectedTool(toolName)
+    if tool then
+        local humanoid = char:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid:EquipTool(tool)
+            lastEquip = tick()
+            print("✅ Equipped Tool:", tool.Name)
+        end
+    end
+end
+
+-- 🔹 Loop Auto-Equip (เช็คตาย + ลดความถี่)
 task.spawn(function()
-    while task.wait(0.3) do
-        if Options.AutoEquip.Value and Options.AutoFarm.Value and selectedTool and char and hrp then
-            
-            -- ⛔ กันรีบ equip หลังเกิด
-            if tick() - respawnTime < 2 then continue end
+    while task.wait(0.1) do
+        if not Options.AutoFarm.Value then continue end
+        if not char then continue end
 
-            local humanoid = char:FindFirstChildOfClass("Humanoid")
-            if not humanoid then continue end
+        local humanoid = char:FindFirstChildOfClass("Humanoid")
+        if not humanoid then continue end
+        if humanoid.Health <= 0 then continue end
 
-            -- 🔍 เช็ค tool ที่ถืออยู่ตอนนี้
-            local equippedTool = char:FindFirstChildOfClass("Tool")
+        -- ✅ อ่านค่าจริงจาก Dropdown ทุกครั้ง
+        local currentTool = ToolDropdown.Value
+        if not currentTool then continue end
 
-            -- ❌ ไม่มี tool หรือถือไม่ตรง
-            if not equippedTool or equippedTool.Name ~= selectedTool then
-                
-                local tool = player.Backpack:FindFirstChild(selectedTool)
+        local equippedTool = char:FindFirstChildOfClass("Tool")
+        local toolInBackpack = player.Backpack:FindFirstChild(currentTool)
 
-                if tool then
-                    humanoid:EquipTool(tool) -- 🔥 equip แบบเนียน
-                end
-            end
+        if (equippedTool and equippedTool.Name ~= currentTool) or (not equippedTool and toolInBackpack) then
+            equipTool(currentTool)
         end
     end
 end)
+
+
 -- ========================
 -- 🔁 Auto Replay
 -- ========================
@@ -490,20 +523,20 @@ end)
 
 
 -- ========================
--- ⚔️ Auto Skill
+-- ⚔️ Auto Skill (ปรับให้ตรงกับ Dropdown ของคุณ)
 -- ========================
+-- ใช้ตัวแปร toggle ของคุณโดยตรง
 task.spawn(function()
     local order = {"Z","X","C","V","R"}
 
     while task.wait(0.02) do
         if Options.AutoSkill.Value and Options.AutoFarm.Value then
-            if not currentMob or not hum or hum.Health <= 0 then
-                continue
-            end
-            for _, key in ipairs(order) do
-                if SelectedSkills[key] then
-                    local keyCode = Enum.KeyCode[key]
+            if not currentMob or not hum or hum.Health <= 0 then continue end
 
+            -- อ่าน Dropdown.Value แทน SelectedSkills
+            for _, key in ipairs(order) do
+                if SkillDropdown.Value[key] then
+                    local keyCode = Enum.KeyCode[key]
                     if keyCode then
                         VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
                         task.wait(0.01)
@@ -515,13 +548,6 @@ task.spawn(function()
     end
 end)
 
-RunService.RenderStepped:Connect(function()
-    if Options.AutoFarm.Value and Options.AutoSkill.Value then
-        if currentMob and root then
-            aimAtTarget(root)
-        end
-    end
-end)
 
 -- ========================
 -- 🔹 Auto Spin Logic (Notify Version)
