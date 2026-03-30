@@ -1,4 +1,3 @@
-
 -- ========================
 -- 🔗 Load UI
 -- ========================
@@ -137,6 +136,7 @@ updateCharacter()
 -- หา Tool ใน Backpack --
 local function getTools()
     toolList = {}
+    task.wait(3) -- รอโหลด Backpack
 
     for _, v in pairs(player.Backpack:GetChildren()) do
         if v:IsA("Tool") then
