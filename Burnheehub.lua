@@ -1,5 +1,4 @@
-repeat task.wait() until game:IsLoaded()
-task.wait(3)
+
 
 -- ========================
 -- 🔗 Load UI
@@ -79,7 +78,8 @@ end)
 local blacklist = {
     ["StarterTrainingDummy"] = true,
     ["TrainingDummy"] = true,
-    ["BossDummy"] = true
+    ["BossDummy"] = true,
+    ["DivineDogs"] = true
 }
 -- หามอนใกล้สุดที่ไม่อยู่ใน blacklist --
 local function getEnemy()
@@ -355,7 +355,7 @@ RunService.Heartbeat:Connect(function()
     if not hrp then return end
 
     if not currentMob or not hum or hum.Health <= 0 then
-    currentMob, hum, root = getEnemy()
+        currentMob, hum, root = getEnemy()
     end
 
     -- 🧭 ไม่มีมอน → TP เปิดแมพ
@@ -370,7 +370,7 @@ RunService.Heartbeat:Connect(function()
         hum = nil
         root = nil
     end
-
+    task.wait(0.1) -- ลดโหลดเครื่อง
     -- 🎯 หาเป้าใหม่
     if not currentMob or not hum or hum.Health <= 0 then
         currentMob, hum, root = getEnemy()
@@ -399,12 +399,15 @@ RunService.Heartbeat:Connect(function()
     hrp.CFrame = targetCF
     hrp.CFrame = CFrame.new(hrp.Position, root.Position)
 
-    if tick() - lastHit >= hitDelay and not mouseDown then
-        lastHit = tick()
+    if hum and hum.Health > 0 then
+         aimAtTarget(root)
+        if tick() - lastHit >= hitDelay and not mouseDown then
+            lastHit = tick()
 
-        VirtualInputManager:SendMouseButtonEvent(0,0,0,true,game,0)
-        task.wait()
-        VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0)
+            VirtualInputManager:SendMouseButtonEvent(0,0,0,true,game,0)
+            task.wait()
+            VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0)
+        end
     end
 end
 
@@ -414,18 +417,25 @@ end)
 -- 🧰 Auto Equip Tool
 -- ========================
 task.spawn(function()
-    while task.wait(0.5) do
+    while task.wait(0.3) do
         if Options.AutoEquip.Value and Options.AutoFarm.Value and selectedTool and char and hrp then
             
             -- ⛔ กันรีบ equip หลังเกิด
             if tick() - respawnTime < 2 then continue end
 
-            local tool = player.Backpack:FindFirstChild(selectedTool)
+            local humanoid = char:FindFirstChildOfClass("Humanoid")
+            if not humanoid then continue end
 
-            if tool then
-                -- 🔥 เช็คก่อน equip
-                if not char:FindFirstChild(tool.Name) then
-                    tool.Parent = char
+            -- 🔍 เช็ค tool ที่ถืออยู่ตอนนี้
+            local equippedTool = char:FindFirstChildOfClass("Tool")
+
+            -- ❌ ไม่มี tool หรือถือไม่ตรง
+            if not equippedTool or equippedTool.Name ~= selectedTool then
+                
+                local tool = player.Backpack:FindFirstChild(selectedTool)
+
+                if tool then
+                    humanoid:EquipTool(tool) -- 🔥 equip แบบเนียน
                 end
             end
         end
@@ -467,6 +477,9 @@ task.spawn(function()
 
     while task.wait(0.02) do
         if Options.AutoSkill.Value and Options.AutoFarm.Value then
+            if not currentMob or not hum or hum.Health <= 0 then
+                continue
+            end
             for _, key in ipairs(order) do
                 if SelectedSkills[key] then
                     local keyCode = Enum.KeyCode[key]
